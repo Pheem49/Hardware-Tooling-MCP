@@ -1,32 +1,36 @@
 # Hardware-Tooling-MCP
 
-**Embedded / Hardware Tooling Bridge (`hardware-tooling-mcp`)** คือ MCP Server ที่เชื่อมโลกของ **ฮาร์ดแวร์จริงที่เสียบอยู่กับคอมพิวเตอร์** และ **ระบบปฏิบัติการ (Host OS)** เข้ากับ AI Agent (เช่น Claude Desktop, Cursor, Cline, Roo Code, Antigravity, หรือ AI CLI ต่างๆ) ผ่าน Model Context Protocol (MCP) แบบ Local `stdio`
+**Embedded & Hardware Tooling Bridge (`hardware-tooling-mcp`)** is a Model Context Protocol (MCP) server that gives AI Agents (Claude Desktop, Cursor, Cline, Roo Code, Antigravity, etc.) direct hands-on access to **physical hardware connected to your computer** and **host OS processes/media** over local `stdio`.
+
+Normally, AI coding assistants live solely in text and source files—they cannot see which USB port an ESP32 is plugged into, read serial panic stack traces, toggle GPIO pins, inspect a board via a USB microscope, or unlock a busy serial port. **Hardware-Tooling-MCP** bridges that gap.
 
 ```text
-[ ผู้ใช้คุยภาษาคน ]
+[ Developer (Natural Language) ]
        │
        ▼
-[ AI Agent ]
-       │ (เรียก MCP Tools: list_serial_ports, read_serial_logs, compile_and_flash, ...)
+[ AI Agent (Claude / Cursor / CLI) ]
+       │ (MCP Tool Calls over Local stdio)
        ▼
-[ Hardware Tooling MCP Bridge (รันแบบ Local stdio บนเครื่องผู้ใช้) ]
-       ├── 1. USB / Serial Bridge (pyserial, DTR/RTS Bootloader & Reset, Crash Detector)
-       ├── 2. Hardware Flashing & Toolchains (check_prerequisites, arduino-cli, pio, idf.py, esptool)
+[ Hardware Tooling MCP Bridge ]
+       ├── 1. USB / Serial Bridge (pyserial, DTR/RTS Bootloader & Reset, Crash Dump Detector)
+       ├── 2. Firmware Flashing & Toolchains (check_prerequisites, arduino-cli, pio, idf.py, esptool)
        ├── 3. Direct GPIO / I2C / SPI (FT232H / FTDI MPSSE & Linux i2c/spidev/gpiochip)
-       ├── 4. Process & Port Management (psutil, lsof, ปลดล็อกพอร์ต Serial ที่ค้าง)
-       ├── 5. Audio & Media Control (อัดเสียงทดสอบไมค์ + วิเคราะห์ RMS/dBFS, ปรับระดับเสียง, สร้างเสียง Tone)
-       ├── 6. GUI & Screen Automation (take_screenshot, send_hotkey)
-       ├── 7. Bluetooth Low Energy (BLE) (bleak: scan, GATT inspect, read/write characteristic)
+       ├── 4. Host Process & Port Lock Manager (psutil, lsof, free locked serial ports)
+       ├── 5. Audio & Media Control (Mic recording + RMS/dBFS signal analysis, volume, test tones)
+       ├── 6. GUI & Screen Automation (take_screenshot, send_hotkey via xdotool/ffmpeg)
+       ├── 7. Bluetooth Low Energy (BLE) (bleak: scan, GATT service discovery, characteristic R/W)
        └── 8. Webcam/Microscope Vision, Logic Analyzer (sigrok-cli) & Android ADB
 ```
 
 ---
 
-## วิธีติดตั้งและใช้งาน (Quick Start)
+## Quick Start (Installation & Client Config)
 
-เนื่องจาก MCP Server ตัวนี้ต้องคุยกับพอร์ต USB/Serial และ OS บนเครื่องโดยตรง จึงทำงานแบบ **Local Transport (`stdio`)** ผู้ใช้สามารถนำ Config JSON ด้านล่างไปวางใน AI Client ที่ใช้งานได้ทันที
+Because this MCP server interacts directly with local USB/Serial ports, Bluetooth, cameras, and OS processes, it runs locally on your machine via `stdio`.
 
-### แบบที่ 1: เรียกผ่าน `uvx` จาก GitHub Repository โดยตรง (ไม่ต้อง clone โค้ดเอง)
+### Option 1: Run directly from GitHub via `uvx` (Recommended — Zero manual setup)
+
+Add the following to your MCP client configuration file:
 
 ```json
 {
@@ -43,7 +47,7 @@
 }
 ```
 
-### แบบที่ 2: เรียกผ่าน `uvx` จาก PyPI (เมื่อเผยแพร่บน PyPI แล้ว)
+### Option 2: Run via `uvx` from PyPI
 
 ```json
 {
@@ -56,7 +60,7 @@
 }
 ```
 
-### แบบที่ 3: รันจากโฟลเดอร์ที่ Clone ลงเครื่อง (Local Development)
+### Option 3: Local Clone & Development
 
 ```bash
 git clone https://github.com/Pheem49/Hardware-Tooling-MCP.git
@@ -64,7 +68,7 @@ cd Hardware-Tooling-MCP
 uv sync
 ```
 
-จากนั้นตั้งค่าใน MCP Client:
+Configure your MCP client to point to your local directory:
 
 ```json
 {
@@ -84,95 +88,118 @@ uv sync
 
 ---
 
-## ตำแหน่งไฟล์ตั้งค่าของแต่ละ AI Client
+## Where to Put Your MCP Config
 
-นำ JSON ด้านบนไปวางในไฟล์ Config ตามโปรแกรมที่คุณใช้งาน:
-
-| AI Client | ตำแหน่งไฟล์ตั้งค่า (Config Path) |
+| AI Client | Configuration File Path |
 | :--- | :--- |
 | **Claude Desktop (Linux)** | `~/.config/Claude/claude_desktop_config.json` |
 | **Claude Desktop (macOS)** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | **Claude Desktop (Windows)** | `%APPDATA%\Claude\claude_desktop_config.json` |
-| **Cursor** | `.cursor/mcp.json` (ระดับโปรเจกต์) หรือ `~/.cursor/mcp.json` (ระดับ Global) |
-| **Cline / Roo Code (VS Code)** | เปิดแถบ MCP Servers ใน Extension แล้วเลือก **Edit MCP Settings** |
+| **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
+| **Cline / Roo Code (VS Code)** | Open MCP Servers panel in the extension → **Edit MCP Settings** |
 
 ---
 
-## ชุด Tools ทั้งหมด (33 Tools แบ่งตาม 8 โมดูล)
+## Available Tools (33 Tools across 8 Modules)
 
 ### 1. USB / Serial Bridge (`tools/serial_bridge.py`)
-- `list_serial_ports(include_symlinks, hide_phantom_ttys)` — สแกนพอร์ต USB Serial ทั้งหมด พร้อมระบุ VID/PID และทายชนิดบอร์ดอัตโนมัติ (ESP32, Arduino, Pico, STM32, CP210x, CH340, FTDI)
-- `read_serial_logs(port, baudrate, timeout_sec, max_lines, stop_on_pattern, stop_on_crash_dump, reset_before_read)` — อ่าน Serial Monitor พร้อมตรวจจับ Crash Dump อัตโนมัติ (`Guru Meditation Error`, `Backtrace:`, `Brownout detector`, `HardFault`)
-- `send_serial_command(port, data, baudrate, encoding, line_ending, read_response_sec)` — ส่งข้อความ (`utf-8`/`ascii`) หรือชุด Byte ดิบ (`hex` เช่น `"AA 55 01 FF"`) เข้าบอร์ดและอ่านผลตอบกลับทันที
-- `toggle_dtr_rts(port, mode, dtr, rts, pulse_ms)` — สั่งรีเซ็ตบอร์ด (`mode="reset"`) หรือบังคับเข้าโหมดแฟลช ESP32 (`mode="esp32_bootloader"`) ผ่านขา DTR/RTS โดยไม่ต้องกดปุ่มบนบอร์ด
+- `list_serial_ports(include_symlinks, hide_phantom_ttys)` — Scan all connected USB/Serial ports with VID/PID, manufacturer, and automatic board identification (ESP32, Arduino, Raspberry Pi Pico, STM32, CP210x, CH340, FTDI).
+- `read_serial_logs(port, baudrate, timeout_sec, max_lines, stop_on_pattern, stop_on_crash_dump, reset_before_read)` — Read serial monitor output with automatic MCU crash dump detection (`Guru Meditation Error`, `Backtrace:`, `Brownout detector`, `HardFault`).
+- `send_serial_command(port, data, baudrate, encoding, line_ending, read_response_sec)` — Send text (`utf-8`/`ascii`) or raw byte payloads (`hex`, e.g. `"AA 55 01 FF"`) over UART RX/TX and read back the response. Supports AT commands, G-code, and Modbus RTU frames.
+- `toggle_dtr_rts(port, mode, dtr, rts, pulse_ms)` — Hardware-reset the microcontroller (`mode="reset"`) or force ESP32 into ROM bootloader mode (`mode="esp32_bootloader"`) via DTR/RTS lines without pressing physical buttons.
 
-### 2. Hardware Flashing, Toolchains & Readiness (`tools/toolchains.py`)
-- `check_prerequisites()` — **ตรวจสอบความพร้อมของเครื่องผู้ใช้ครบวงจร**: เช็คสิทธิ์กลุ่มพอร์ต Serial บน Linux (`dialout`/`uucp`), เช็ค Toolchain ที่ติดตั้งแล้ว และแนะนำคำสั่งติดตั้งหากยังขาดเครื่องมือใด
-- `check_toolchains()` — ตรวจสอบเวอร์ชันและ path ของ `arduino-cli`, `pio`, `idf.py`, `esptool`, `openocd`, `avrdude`, `dfu-util`, `picotool`
-- `compile_and_flash(project_path, toolchain, port, board_fqbn_or_env, action, extra_args, timeout_sec)` — คอมไพล์และอัปโหลดเฟิร์มแวร์ด้วย `arduino-cli`, `platformio`, หรือ `esp-idf` (รองรับ `toolchain="auto"` ตรวจจับจากไฟล์โปรเจกต์อัตโนมัติ)
-- `esptool_command(operation, port, baudrate, chip, flash_offset, binary_path, extra_args)` — เรียก `esptool` โดยตรงเพื่อเช็ค `chip_id`, `flash_id`, `read_mac`, `erase_flash`, หรือ `write_flash`
-- `run_custom_toolchain(command, working_directory, timeout_sec)` — รันคำสั่ง CLI เฉพาะทางอื่นๆ (เช่น `make flash`, `west build`, `cargo embed`)
+### 2. Firmware Flashing, Toolchains & Readiness (`tools/toolchains.py`)
+- `check_prerequisites()` — **Full host environment diagnostic**: verifies Linux serial group permissions (`dialout`/`uucp`), checks installed embedded toolchains, and provides exact installation or permission-fix commands.
+- `check_toolchains()` — Detect versions and paths of `arduino-cli`, `pio` (PlatformIO), `idf.py` (ESP-IDF), `esptool`, `openocd`, `avrdude`, `dfu-util`, and `picotool`.
+- `compile_and_flash(project_path, toolchain, port, board_fqbn_or_env, action, extra_args, timeout_sec)` — Compile and/or upload firmware using `arduino-cli`, `platformio`, or `esp-idf` (supports `toolchain="auto"` to auto-detect from `platformio.ini`, `CMakeLists.txt`, or `.ino` sketches).
+- `esptool_command(operation, port, baudrate, chip, flash_offset, binary_path, extra_args)` — Run `esptool` directly for `chip_id`, `flash_id`, `read_mac`, `erase_flash`, or `write_flash`.
+- `run_custom_toolchain(command, working_directory, timeout_sec)` — Execute custom build/flash CLI commands (e.g., `make flash`, `west build`, `cargo embed`, `openocd`).
 
-### 3. Direct GPIO / I2C / SPI (`tools/gpio_bus.py`)
-- `scan_hardware_bridges()` — ค้นหาชิปแปลง USB Bridge เช่น FTDI (`FT232H`, `FT2232H`) และอุปกรณ์ `/dev/i2c-*`, `/dev/spidev*`, `/dev/gpiochip*` บน Linux
-- `ftdi_gpio_control(ftdi_url, direction_mask, write_value)` — สั่ง High/Low หรืออ่านค่าขา GPIO 8-bit โดยตรงผ่าน FTDI
-- `ftdi_i2c_scan(ftdi_url, frequency_hz)` — สแกนหา I2C Slave Address บนบัส
-- `ftdi_i2c_transfer(address, ftdi_url, register_addr, write_hex, read_length, frequency_hz)` — อ่าน/เขียน Register ของเซนเซอร์ I2C โดยตรง
-- `ftdi_spi_transfer(write_hex, read_length, ftdi_url, cs, freq_hz, mode)` — รับ/ส่งข้อมูลผ่านบัส SPI โดยตรง
+### 3. Direct GPIO / I2C / SPI Bridge (`tools/gpio_bus.py`)
+- `scan_hardware_bridges()` — Discover USB-to-GPIO/I2C/SPI bridges (FTDI `FT232H`, `FT2232H`) and native Linux `/dev/i2c-*`, `/dev/spidev*`, and `/dev/gpiochip*` nodes.
+- `ftdi_gpio_control(ftdi_url, direction_mask, write_value)` — Drive or read 8-bit GPIO pins directly via an FTDI USB bridge.
+- `ftdi_i2c_scan(ftdi_url, frequency_hz)` — Scan an I2C bus for active 7-bit slave addresses.
+- `ftdi_i2c_transfer(address, ftdi_url, register_addr, write_hex, read_length, frequency_hz)` — Read/write I2C registers directly on sensors (e.g. BME280, MPU6050, SSD1306) without needing a microcontroller in between.
+- `ftdi_spi_transfer(write_hex, read_length, ftdi_url, cs, freq_hz, mode)` — Perform full-duplex SPI transfers (e.g., reading JEDEC IDs or dumping SPI Flash chips).
 
-### 4. Process & Port Management (`tools/process_manager.py`)
-- `list_processes(filter_name, limit)` — ตรวจสอบโปรเซสที่กำลังรันอยู่บนเครื่อง
-- `find_port_occupiers(port)` — เช็คว่าโปรแกรมใดกำลังแย่งใช้งานพอร์ต Serial (แก้ปัญหา `Port busy`)
-- `free_serial_port(port, force)` — สั่งปิดโปรเซสที่ล็อกพอร์ต Serial อยู่โดยอัตโนมัติเพื่อให้พร้อมแฟลชหรือเปิด Serial Monitor
-- `start_process(command, args, cwd, background, timeout_sec)` — เปิดโปรแกรมหรือรัน CLI utility (ทั้งแบบรอผลและแบบ Background)
-- `kill_process(pid, process_name, force)` — สั่งปิดโปรแกรมตาม PID หรือชื่อโปรเซส
+### 4. Host Process & Serial Port Lock Management (`tools/process_manager.py`)
+- `list_processes(filter_name, limit)` — List running OS processes filtered by name or command line.
+- `find_port_occupiers(port)` — Identify which process is holding a lock on a serial port (e.g., `/dev/ttyUSB0`) when you hit `Port busy` errors.
+- `free_serial_port(port, force)` — Automatically terminate processes locking a serial port so firmware flashing or monitoring can proceed.
+- `start_process(command, args, cwd, background, timeout_sec)` — Launch a foreground or background process on the host OS.
+- `kill_process(pid, process_name, force)` — Terminate a process by PID or name.
 
-### 5. Audio & Media Control (`tools/audio_media.py`)
-- `list_media_devices()` — แสดงรายการไมโครโฟน ลำโพง (ALSA / PipeWire / PulseAudio) และกล้อง Webcam (`/dev/video*`)
-- `set_audio_volume(target, volume_percent, mute, device_id)` — ปรับระดับเสียงหรือ Mute/Unmute ลำโพง (`sink`) และไมโครโฟน (`source`)
-- `record_audio_sample(duration_sec, output_path, sample_rate, channels, alsa_device)` — อัดเสียงจากไมโครโฟนพร้อมคำนวณค่าสถิติสัญญาณเสียง (`rms_dbfs`, `peak_dbfs`, `is_silent`) เพื่อเช็คว่ามีเสียงออกจริงหรือไม่
-- `play_test_tone(frequency_hz, duration_sec)` — สร้างและเล่นเสียง Sine Wave ความถี่ที่กำหนดออกลำโพงเพื่อใช้ทดสอบไมโครโฟนบนบอร์ด
+### 5. Audio & Media Device Control (`tools/audio_media.py`)
+- `list_media_devices()` — List microphones, speakers (ALSA / PipeWire / PulseAudio), and video/webcam devices (`/dev/video*`).
+- `set_audio_volume(target, volume_percent, mute, device_id)` — Adjust volume or mute/unmute speakers (`sink`) and microphones (`source`).
+- `record_audio_sample(duration_sec, output_path, sample_rate, channels, alsa_device)` — Record audio from a microphone and compute signal metrics (`rms_dbfs`, `peak_dbfs`, `is_silent`) to verify whether an audio circuit/amp is actually producing sound.
+- `play_test_tone(frequency_hz, duration_sec)` — Generate and play a pure sine wave tone on the host speakers to test microphone sensors (e.g. I2S INMP441) on a board.
 
 ### 6. GUI & Screen Automation (`tools/gui_automation.py`)
-- `take_screenshot(output_path, region)` — แคปภาพหน้าจอทั้งหมดหรือเฉพาะพื้นที่ (`x,y,width,height`) ส่งให้ AI ดูหน้าต่างโปรแกรมหรือ Error Dialog
-- `send_hotkey(keys, window_title, delay_ms)` — ส่งคีย์ลัดคีย์บอร์ด (เช่น `ctrl+shift+b`, `ctrl+s`) ไปยังหน้าต่างโปรแกรมที่กำหนดผ่าน `xdotool`
+- `take_screenshot(output_path, region)` — Capture a full-screen or region (`x,y,width,height`) screenshot so the AI can inspect application windows or error dialogs.
+- `send_hotkey(keys, window_title, delay_ms)` — Send keyboard shortcuts (e.g., `ctrl+shift+b`, `ctrl+s`) to the active or specified window via `xdotool`.
 
 ### 7. Bluetooth Low Energy (BLE) (`tools/ble_bridge.py`)
-- `ble_scan_devices(timeout_sec, name_filter)` — สแกนหาอุปกรณ์ BLE รอบข้าง (ESP32 BLE, nRF52, เซนเซอร์ไร้สาย) พร้อมค่า RSSI และ Service UUIDs
-- `ble_inspect_gatt(address, timeout_sec)` — เชื่อมต่ออุปกรณ์ BLE เพื่อดูรายการ GATT Services และ Characteristics ทั้งหมด
-- `ble_read_write_characteristic(address, characteristic_uuid, write_data, encoding, read_after_write, with_response, timeout_sec)` — อ่านหรือส่งข้อมูล (ข้อความหรือ Hex Byte) ไปยัง GATT Characteristic ของบอร์ดไร้สาย
+- `ble_scan_devices(timeout_sec, name_filter)` — Scan for nearby BLE peripherals (ESP32 BLE, nRF52, wireless sensors) with RSSI, service UUIDs, and manufacturer data.
+- `ble_inspect_gatt(address, timeout_sec)` — Connect to a BLE device and enumerate all GATT Services, Characteristics, and properties (`read`, `write`, `notify`).
+- `ble_read_write_characteristic(address, characteristic_uuid, write_data, encoding, read_after_write, with_response, timeout_sec)` — Read or write text/hex payloads to a BLE GATT Characteristic.
 
 ### 8. Webcam/Microscope Vision, Logic Analyzer & Android ADB (`tools/external_devices.py`)
-- `capture_camera_snapshot(device, output_path, resolution, skip_warmup_frames)` — สั่งถ่ายภาพบอร์ดจริงบนโต๊ะผ่านกล้อง Webcam หรือกล้องจุลทรรศน์ USB (`/dev/video*`) เพื่อให้ AI ตรวจดูไฟ LED, หน้าจอ OLED/LCD หรือจุดบัดกรีบน PCB
-- `sigrok_scan_devices()` — สแกนหา Logic Analyzer / Oscilloscope ที่เสียบอยู่ผ่าน `sigrok-cli` (เช่น FX2lafw 24MHz 8-ch, Saleae clones, DSLogic)
-- `sigrok_capture_and_decode(driver, samplerate, samples, time_ms, channels, protocol_decoder, output_file)` — ดึงสัญญาณพัลส์ดิจิทัลจริงและถอดรหัสโปรโตคอล (`uart`, `i2c`, `spi`, `pwm`) อัตโนมัติ
-- `adb_list_devices()` — แสดงรายการโทรศัพท์หรือบอร์ด Android ที่เสียบสาย USB ผ่าน `adb`
-- `adb_command(command, device_serial, is_shell, timeout_sec)` — รันคำสั่ง `adb shell` (เช่นดึง `logcat`, เช็คแบตเตอรี่, สั่งกดหน้าจอ) หรือสั่งติดตั้งแอป `.apk`
+- `capture_camera_snapshot(device, output_path, resolution, skip_warmup_frames)` — Capture a photo from a connected Webcam or USB Microscope (`/dev/video*`) to visually verify LED states, OLED/LCD screens, or PCB wiring.
+- `sigrok_scan_devices()` — Discover connected Logic Analyzers, Oscilloscopes, and Multimeters via `sigrok-cli` (FX2lafw 24MHz 8-ch, Saleae clones, DSLogic, etc.).
+- `sigrok_capture_and_decode(driver, samplerate, samples, time_ms, channels, protocol_decoder, output_file)` — Capture digital signals and run protocol decoders (`uart`, `i2c`, `spi`, `pwm`, `ws281x`).
+- `adb_list_devices()` — List connected Android phones, tablets, or embedded Android boards via `adb`.
+- `adb_command(command, device_serial, is_shell, timeout_sec)` — Run `adb shell` commands (e.g., `logcat -d -t 50`, `dumpsys battery`, `input tap`) or host ADB commands (`install app.apk`).
 
 ---
 
-## การแก้ไขปัญหาที่พบบ่อย (Troubleshooting Checklist)
+## Example Workflows
 
-คุณสามารถบอกให้ AI เรียก tool `check_prerequisites` เพื่อตรวจสอบเครื่องของคุณอัตโนมัติได้ทันที หรือตรวจสอบตามรายการด้านล่าง:
+1. **Automated Crash Loop Debugging:**
+   > *"My ESP32 keeps rebooting when I initialize the I2S microphone. Read the serial logs, find why it's crashing, fix the code, and flash it back to the board."*
+   The AI calls `list_serial_ports` → `read_serial_logs` (catches the `Guru Meditation Error` & stack trace) → edits your C++ code → calls `compile_and_flash` → calls `read_serial_logs` again to confirm the crash is gone.
 
-### 1. ปัญหา `Permission denied: '/dev/ttyUSB0'` บน Linux
-ผู้ใช้ Linux มักไม่มีสิทธิ์เข้าถึงพอร์ต Serial ในครั้งแรก ต้องเพิ่ม user เข้ากลุ่ม `dialout` (Debian/Ubuntu/Mint) หรือ `uucp` (Arch/Manjaro):
+2. **Hardware-in-the-Loop Audio & Visual Verification:**
+   > *"Send the 'LED_ON' command over serial, take a snapshot from `/dev/video0` to verify the red LED turned on, and play a 1kHz test tone while reading the I2S peak values from serial."*
+
+---
+
+## Troubleshooting Checklist
+
+You can ask the AI to run `check_prerequisites` at any time to automatically diagnose your system.
+
+### 1. `Permission denied: '/dev/ttyUSB0'` on Linux
+Add your user to the `dialout` (Debian/Ubuntu) or `uucp` (Arch) group so you can access serial ports without `sudo`:
 ```bash
-# สำหรับ Ubuntu / Debian / Raspberry Pi OS
+# Ubuntu / Debian / Raspberry Pi OS
 sudo usermod -aG dialout $USER
 
-# สำหรับ Arch Linux / Manjaro
+# Arch Linux / Manjaro
 sudo usermod -aG uucp $USER
 ```
-*(หลังจากรันคำสั่งแล้ว ต้อง **Log out แล้ว Log in ใหม่** หรือรีสตาร์ทเครื่อง 1 ครั้ง)*
+*(Log out and log back in after running this command for group changes to take effect.)*
 
-### 2. ปัญหาพอร์ตไม่ว่าง (`Port busy` / `Resource temporarily unavailable`)
-มักเกิดจากเปิด Serial Monitor ใน Arduino IDE, VS Code, หรือ `minicom`/`screen` ค้างไว้ สามารถสั่ง AI ว่า:
-> *"ช่วยเช็คว่าโปรแกรมอะไรแย่งพอร์ต `/dev/ttyUSB0` อยู่ แล้วสั่งปิดให้หน่อย"*
-AI จะเรียก `find_port_occupiers` และ `free_serial_port` จัดการให้ทันทีโดยไม่ต้องสลับหน้าต่างไปหาปิดเอง
+### 2. `Port busy` / `Resource temporarily unavailable`
+If another serial monitor (`screen`, `minicom`, Arduino IDE) is holding the port, simply ask the AI:
+> *"Check what process is locking `/dev/ttyUSB0` and free the port."*
+The AI will call `find_port_occupiers` and `free_serial_port` automatically.
 
-### 3. การติดตั้ง Toolchain ภายนอก (สำหรับสั่ง Compile & Flash)
-เลือกติดตั้งเฉพาะตัวที่คุณใช้งาน:
-- **PlatformIO**: `uv tool install platformio` หรือ `pipx install platformio`
+### 3. Installing Optional External CLI Toolchains
+Install whichever tools match your workflow:
+- **PlatformIO**: `uv tool install platformio`
 - **esptool**: `uv tool install esptool`
-- **Arduino CLI**: `brew install arduino-cli` หรือดาวน์โหลดจากเว็บไซต์ Arduino
+- **Arduino CLI**: `brew install arduino-cli` or via official installer script
+- **Logic Analyzer (`sigrok-cli`)**: `sudo apt install sigrok-cli sigrok-firmware-fx2lafw`
+- **Android ADB**: `sudo apt install adb`
+
+---
+
+## Running Tests
+
+```bash
+uv run pytest -v
+```
+
+## License
+
+[MIT](LICENSE)
