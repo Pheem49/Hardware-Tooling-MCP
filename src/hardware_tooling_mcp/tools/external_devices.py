@@ -261,14 +261,18 @@ def register_external_device_tools(mcp: MCPServer) -> None:
                 "error": "`adb` is not installed. Run `sudo apt install adb`.",
             }
 
+        cmd_parts = shlex.split(command)
+        if not cmd_parts:
+            return {"success": False, "error": "Command cannot be empty."}
+
         cmd = [exe]
         if device_serial:
             cmd.extend(["-s", device_serial])
         if is_shell:
             cmd.append("shell")
-            cmd.extend(shlex.split(command))
+            cmd.extend(cmd_parts)
         else:
-            cmd.extend(shlex.split(command))
+            cmd.extend(cmd_parts)
 
         try:
             proc = subprocess.run(

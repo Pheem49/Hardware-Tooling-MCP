@@ -178,8 +178,11 @@ def register_process_tools(mcp: MCPServer) -> None:
         errors: list[str] = []
         sig = signal.SIGKILL if force else signal.SIGTERM
 
+        self_pid = os.getpid()
         for h in holders:
             pid = h["pid"]
+            if pid == self_pid:
+                continue
             try:
                 p = psutil.Process(pid)
                 p.send_signal(sig)
@@ -231,8 +234,8 @@ def register_process_tools(mcp: MCPServer) -> None:
                 proc = subprocess.Popen(
                     cmd_list,
                     cwd=work_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                     text=True,
                     start_new_session=True,
                 )

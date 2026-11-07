@@ -164,9 +164,14 @@ def register_serial_tools(mcp: MCPServer) -> None:
                                 # Capture up to 25 more lines after crash header to get full stacktrace
                                 crash_post_lines_remaining = 25
 
-                    if stop_on_pattern and re.search(stop_on_pattern, line):
-                        matched_pattern = True
-                        break
+                    if stop_on_pattern:
+                        try:
+                            is_match = bool(re.search(stop_on_pattern, line))
+                        except re.error:
+                            is_match = stop_on_pattern in line
+                        if is_match:
+                            matched_pattern = True
+                            break
 
                     if crash_post_lines_remaining is not None:
                         crash_post_lines_remaining -= 1
@@ -256,7 +261,7 @@ def register_serial_tools(mcp: MCPServer) -> None:
                 "response_text": "\n".join(response_lines),
                 "response_hex": response_hex,
             }
-        except serial.SerialException as exc:
+        except (serial.SerialException, LookupError, ValueError) as exc:
             return {
                 "success": False,
                 "port": port,
@@ -321,7 +326,7 @@ def register_serial_tools(mcp: MCPServer) -> None:
                 "mode": mode,
                 "action": action_desc,
             }
-        except serial.SerialException as exc:
+        except (serial.SerialException, LookupError, ValueError) as exc:
             return {
                 "success": False,
                 "port": port,

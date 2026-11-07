@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import math
+import os
 import shutil
 import struct
 import subprocess
@@ -74,19 +75,19 @@ def register_audio_media_tools(mcp: MCPServer) -> None:
         }
 
         if shutil.which("arecord"):
-            proc = subprocess.run(["arecord", "-l"], capture_output=True, text=True, check=False)
+            proc = subprocess.run(["arecord", "-l"], capture_output=True, text=True, timeout=5.0, check=False)
             result["alsa_capture_devices"] = proc.stdout.strip()
 
         if shutil.which("aplay"):
-            proc = subprocess.run(["aplay", "-l"], capture_output=True, text=True, check=False)
+            proc = subprocess.run(["aplay", "-l"], capture_output=True, text=True, timeout=5.0, check=False)
             result["alsa_playback_devices"] = proc.stdout.strip()
 
         if shutil.which("wpctl"):
-            proc = subprocess.run(["wpctl", "status"], capture_output=True, text=True, check=False)
+            proc = subprocess.run(["wpctl", "status"], capture_output=True, text=True, timeout=5.0, check=False)
             result["pipewire_pulse_status"] = proc.stdout.strip()
         elif shutil.which("pactl"):
-            sinks = subprocess.run(["pactl", "list", "short", "sinks"], capture_output=True, text=True, check=False)
-            sources = subprocess.run(["pactl", "list", "short", "sources"], capture_output=True, text=True, check=False)
+            sinks = subprocess.run(["pactl", "list", "short", "sinks"], capture_output=True, text=True, timeout=5.0, check=False)
+            sources = subprocess.run(["pactl", "list", "short", "sources"], capture_output=True, text=True, timeout=5.0, check=False)
             result["pipewire_pulse_status"] = f"Sinks:\n{sinks.stdout}\nSources:\n{sources.stdout}"
 
         return result
@@ -106,6 +107,9 @@ def register_audio_media_tools(mcp: MCPServer) -> None:
             mute: True to mute, False to unmute, or None to leave unchanged.
             device_id: Optional PipeWire/PulseAudio node ID or name (defaults to default sink/source).
         """
+        if target not in ("sink", "source"):
+            return {"success": False, "error": "Invalid target. Must be 'sink' (speaker) or 'source' (microphone)."}
+
         actions: list[str] = []
         if shutil.which("wpctl"):
             default_node = "@DEFAULT_AUDIO_SINK@" if target == "sink" else "@DEFAULT_AUDIO_SOURCE@"
@@ -197,7 +201,6 @@ def register_audio_media_tools(mcp: MCPServer) -> None:
             out_file.parent.mkdir(parents=True, exist_ok=True)
         else:
             fd, tmp_name = tempfile.mkstemp(prefix="hw_mic_test_", suffix=".wav")
-            import os
             os.close(fd)
             out_file = Path(tmp_name)
 
@@ -290,7 +293,6 @@ def register_audio_media_tools(mcp: MCPServer) -> None:
             return {"success": False, "error": "`ffmpeg` is required to generate test tones."}
 
         fd, tmp_wav = tempfile.mkstemp(prefix="hw_tone_", suffix=".wav")
-        import os
         os.close(fd)
         try:
             gen = subprocess.run(
